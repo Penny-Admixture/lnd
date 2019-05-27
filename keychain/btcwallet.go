@@ -22,6 +22,10 @@ const (
 	// CoinTypeLitecoin specifies the BIP44 coin type for Litecoin key
 	// derivation.
 	CoinTypeLitecoin = 2
+
+	// CoinTypePeercoin specifies the BIP44 coin type for Peercoin key
+	// derivation.
+	CoinTypePeercoin = 6
 )
 
 var (
