@@ -45,6 +45,12 @@ const (
 	defaultLitecoinTimeLockDelta = 576
 	defaultLitecoinDustLimit     = btcutil.Amount(54600)
 
+	defaultPeercoinMinHTLCMSat   = lnwire.MilliSatoshi(1000)
+	defaultPeercoinBaseFeeMSat   = lnwire.MilliSatoshi(10000)
+	defaultPeercoinFeeRate       = lnwire.MilliSatoshi(1)
+	defaultPeercoinTimeLockDelta = 40
+	defaultPeercoinDustLimit     = btcutil.Amount(10000)
+
 	// defaultBitcoinStaticFeePerKW is the fee rate of 50 sat/vbyte
 	// expressed in sat/kw.
 	defaultBitcoinStaticFeePerKW = lnwallet.SatPerKWeight(12500)
@@ -53,9 +59,17 @@ const (
 	// expressed in sat/kw.
 	defaultLitecoinStaticFeePerKW = lnwallet.SatPerKWeight(50000)
 
+	// defaultPeercoinStaticFeePerlitecoinKW is the fee rate of 200 sat/vbyte
+	// expressed in sat/kw.
+	defaultPeercoinStaticFeePerKW = lnwallet.SatPerKWeight(10000)
+
 	// btcToLtcConversionRate is a fixed ratio used in order to scale up
 	// payments when running on the Litecoin chain.
 	btcToLtcConversionRate = 60
+
+	// btcToPpcConversionRate is a fixed ratio used in order to scale up
+	// payments when running on the Peercoin chain.
+	btcToPpcConversionRate = 60
 )
 
 // defaultBtcChannelConstraints is the default set of channel constraints that are
@@ -74,6 +88,13 @@ var defaultLtcChannelConstraints = channeldb.ChannelConstraints{
 	MaxAcceptedHtlcs: input.MaxHTLCNumber / 2,
 }
 
+// defaultPpcChannelConstraints is the default set of channel constraints that are
+// meant to be used when initially funding a Peercoin channel.
+var defaultPpcChannelConstraints = channeldb.ChannelConstraints{
+	DustLimit:        defaultPeercoinDustLimit,
+	MaxAcceptedHtlcs: input.MaxHTLCNumber / 2,
+}
+
 // chainCode is an enum-like structure for keeping track of the chains
 // currently supported within lnd.
 type chainCode uint32
@@ -84,6 +105,9 @@ const (
 
 	// litecoinChain is Litecoin's testnet chain.
 	litecoinChain
+
+	// peercoinChain is Peercoin's testnet chain.
+	peercoinChain
 )
 
 // String returns a string representation of the target chainCode.
@@ -93,6 +117,8 @@ func (c chainCode) String() string {
 		return "bitcoin"
 	case litecoinChain:
 		return "litecoin"
+	case peercoinChain:
+		return "peercoin"
 	default:
 		return "kekcoin"
 	}
@@ -166,6 +192,16 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 		cc.feeEstimator = lnwallet.NewStaticFeeEstimator(
 			defaultLitecoinStaticFeePerKW, 0,
 		)
+	case peercoinChain:
+		cc.routingPolicy = htlcswitch.ForwardingPolicy{
+			MinHTLC:       cfg.Peercoin.MinHTLC,
+			BaseFee:       cfg.Peercoin.BaseFee,
+			FeeRate:       cfg.Peercoin.FeeRate,
+			TimeLockDelta: cfg.Peercoin.TimeLockDelta,
+		}
+		cc.feeEstimator = lnwallet.NewStaticFeeEstimator(
+			defaultPeercoinStaticFeePerKW, 0,
+		)
 	default:
 		return nil, fmt.Errorf("Default routing policy for chain %v is "+
 			"unknown", registeredChains.PrimaryChain())
@@ -228,13 +264,15 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 			activeNetParams.Params, neutrinoCS,
 		)
 
-	case "bitcoind", "litecoind":
+	case "bitcoind", "litecoind", "peercoind":
 		var bitcoindMode *bitcoindConfig
 		switch {
 		case cfg.Bitcoin.Active:
 			bitcoindMode = cfg.BitcoindMode
 		case cfg.Litecoin.Active:
 			bitcoindMode = cfg.LitecoindMode
+		case cfg.Peercoin.Active:
+			bitcoindMode = cfg.PeercoindMode
 		}
 		// Otherwise, we'll be speaking directly via RPC and ZMQ to a
 		// bitcoind node. If the specified host for the btcd/ltcd RPC
@@ -257,13 +295,16 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 			bitcoindHost = fmt.Sprintf("%v:%d",
 				bitcoindMode.RPCHost, rpcPort)
 			if (cfg.Bitcoin.Active && cfg.Bitcoin.RegTest) ||
-				(cfg.Litecoin.Active && cfg.Litecoin.RegTest) {
+				(cfg.Litecoin.Active && cfg.Litecoin.RegTest) ||
+				(cfg.Peercoin.Active && cfg.Peercoin.RegTest) {
 				conn, err := net.Dial("tcp", bitcoindHost)
 				if err != nil || conn == nil {
 					if cfg.Bitcoin.Active && cfg.Bitcoin.RegTest {
 						rpcPort = 18443
 					} else if cfg.Litecoin.Active && cfg.Litecoin.RegTest {
 						rpcPort = 19443
+					} else if cfg.Peercoin.Active {
+						rpcPort = 9902
 					}
 					bitcoindHost = fmt.Sprintf("%v:%d",
 						bitcoindMode.RPCHost,
@@ -342,7 +383,23 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 			if err := cc.feeEstimator.Start(); err != nil {
 				return nil, err
 			}
+		} else if cfg.Peercoin.Active && !cfg.Peercoin.RegTest {
+			ltndLog.Infof("Initializing Peercoind backed fee estimator")
+
+			// TODO with proper Peercoin fee estimator
+			fallBackFeeRate := lnwallet.SatPerKVByte(1000)
+			cc.feeEstimator, err = lnwallet.NewBitcoindFeeEstimator(
+				*rpcConfig, fallBackFeeRate.FeePerKWeight(),
+			)
+			if err != nil {
+				return nil, err
+			}
+			if err := cc.feeEstimator.Start(); err != nil {
+				return nil, err
+			}
 		}
+
+	// TODO ppcd support bellow
 	case "btcd", "ltcd":
 		// Otherwise, we'll be speaking directly via RPC to a node.
 		//
@@ -469,6 +526,9 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 	if registeredChains.PrimaryChain() == litecoinChain {
 		channelConstraints = defaultLtcChannelConstraints
 	}
+	if registeredChains.PrimaryChain() == peercoinChain {
+		channelConstraints = defaultPpcChannelConstraints
+	}
 
 	keyRing := keychain.NewBtcWalletKeyRing(
 		wc.InternalWallet(), activeNetParams.CoinType,
@@ -540,14 +600,32 @@ var (
 		0x59, 0x40, 0xfd, 0x1f, 0xe3, 0x65, 0xa7, 0x12,
 	})
 
+	// peercoinTestnetGenesis is the genesis hash of peercoin's testnet chain.
+	peercoinTestnetGenesis = chainhash.Hash([chainhash.HashSize]byte{
+		0xe3, 0x27, 0xcd, 0x80, 0xc8, 0xb1, 0x7e, 0xfd,
+		0xa4, 0xea, 0x08, 0xc5, 0x87, 0x7e, 0x95, 0xd8,
+		0x77, 0x46, 0x2a, 0xb6, 0x63, 0x49, 0xd5, 0x66,
+		0x71, 0x67, 0xfe, 0x32, 0x00, 0x00, 0x00, 0x00,
+	})
+
+	// peercoinMainnetGenesis is the genesis hash of peercoin's main chain.
+	peercoinMainnetGenesis = chainhash.Hash([chainhash.HashSize]byte{
+		0x06, 0x9f, 0x7c, 0xc4, 0xae, 0x81, 0xca, 0x0c,
+		0x7c, 0x72, 0xcc, 0x30, 0xe6, 0x8c, 0x65, 0xb0,
+		0x17, 0xcd, 0x17, 0x3e, 0x50, 0x96, 0x65, 0x7f,
+		0x73, 0xbb, 0x57, 0xf7, 0x01, 0x00, 0x00, 0x00,
+	})
+
 	// chainMap is a simple index that maps a chain's genesis hash to the
 	// chainCode enum for that chain.
 	chainMap = map[chainhash.Hash]chainCode{
 		bitcoinTestnetGenesis:  bitcoinChain,
 		litecoinTestnetGenesis: litecoinChain,
+		peercoinTestnetGenesis: peercoinChain,
 
 		bitcoinMainnetGenesis:  bitcoinChain,
 		litecoinMainnetGenesis: litecoinChain,
+		peercoinTestnetGenesis: peercoinChain,
 	}
 
 	// chainDNSSeeds is a map of a chain's hash to the set of DNS seeds
