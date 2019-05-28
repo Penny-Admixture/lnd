@@ -9,7 +9,6 @@ import (
 	litecoinCfg "github.com/ltcsuite/ltcd/chaincfg"
 	litecoinWire "github.com/ltcsuite/ltcd/wire"
 	peercoinCfg "github.com/ppcsuite/ppcd/chaincfg"
-	peercoinWire "github.com/ppcsuite/ppcd/wire"
 )
 
 // activeNetParams is a pointer to the parameters specific to the currently
@@ -104,11 +103,18 @@ var bitcoinRegTestNetParams = bitcoinNetParams{
 	CoinType: keychain.CoinTypeTestnet,
 }
 
+// peercoinTestNetParams contains parameters specific to Peercoin test network.
+var peercoinTestNetParams = litecoinNetParams{
+	Params:   &peercoinCfg.TestNetParams,
+	rpcPort:  "9904",
+	CoinType: keychain.CoinTypeTestnet,
+}
+
 // peercoinMainNetParams contains the parameters specific to the current
 // Peercoin mainnet.
 var peercoinMainNetParams = peercoinNetParams{
 	Params:   &peercoinCfg.MainNetParams,
-	rpcPort:  "9904",
+	rpcPort:  "9902",
 	CoinType: keychain.CoinTypePeercoin,
 }
 
