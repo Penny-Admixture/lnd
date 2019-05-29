@@ -65,6 +65,11 @@ const (
 	// permitted.
 	maxLtcPaymentMSat = lnwire.MilliSatoshi(math.MaxUint32) *
 		btcToLtcConversionRate
+
+	// maxPpcPaymentMSat is the maximum allowed Peercoin payment currently
+	// permitted.
+	maxPpcPaymentMSat = lnwire.MilliSatoshi(math.MaxUint32) *
+		btcToPpcConversionRate
 )
 
 var (

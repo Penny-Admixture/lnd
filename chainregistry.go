@@ -69,7 +69,7 @@ const (
 
 	// btcToPpcConversionRate is a fixed ratio used in order to scale up
 	// payments when running on the Peercoin chain.
-	btcToPpcConversionRate = 60
+	btcToPpcConversionRate = 10
 )
 
 // defaultBtcChannelConstraints is the default set of channel constraints that are
