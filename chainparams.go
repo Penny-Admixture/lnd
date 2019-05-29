@@ -104,7 +104,7 @@ var bitcoinRegTestNetParams = bitcoinNetParams{
 }
 
 // peercoinTestNetParams contains parameters specific to Peercoin test network.
-var peercoinTestNetParams = litecoinNetParams{
+var peercoinTestNetParams = peercoinNetParams{
 	Params:   &peercoinCfg.TestNetParams,
 	rpcPort:  "9904",
 	CoinType: keychain.CoinTypeTestnet,

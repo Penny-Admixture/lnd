@@ -303,7 +303,7 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 						rpcPort = 18443
 					} else if cfg.Litecoin.Active && cfg.Litecoin.RegTest {
 						rpcPort = 19443
-					} else if cfg.Peercoin.Active {
+					} else if cfg.Peercoin.Active && cfg.Peercoin.RegTest {
 						rpcPort = 9902
 					}
 					bitcoindHost = fmt.Sprintf("%v:%d",
