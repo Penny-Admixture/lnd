@@ -1,6 +1,6 @@
 ## Lightning Network Daemon
 
-[![Build Status](https://img.shields.io/travis/lightningnetwork/lnd.svg)](https://travis-ci.org/lightningnetwork/lnd)
+[![Build Status](https://img.shields.io/travis/peercoin/lnd.svg)](https://travis-ci.org/peercoin/lnd)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lightningnetwork/lnd/blob/master/LICENSE)
 [![Irc](https://img.shields.io/badge/chat-on%20freenode-brightgreen.svg)](https://webchat.freenode.net/?channels=lnd)
 [![Godoc](https://godoc.org/github.com/lightningnetwork/lnd?status.svg)](https://godoc.org/github.com/lightningnetwork/lnd)
@@ -9,10 +9,9 @@
 
 The Lightning Network Daemon (`lnd`) - is a complete implementation of a
 [Lightning Network](https://lightning.network) node.  `lnd` has several pluggable back-end
-chain services including [`btcd`](https://github.com/btcsuite/btcd) (a
-full-node), [`bitcoind`](https://github.com/bitcoin/bitcoin), and
-[`neutrino`](https://github.com/lightninglabs/neutrino) (a new experimental light client). The project's codebase uses the
-[btcsuite](https://github.com/btcsuite/) set of Bitcoin libraries, and also
+chain services including (WIP) [`ppcd`](https://github.com/ppcsuite/ppcd) (a
+full-node), [`peercoind`](https://github.com/peercoin/peercoin).
+The project's codebase uses the [btcsuite](https://github.com/btcsuite/) set of Bitcoin libraries, and also
 exports a large set of isolated re-usable Lightning Network related libraries
 within it.  In the current state `lnd` is capable of:
 * Creating channels.
