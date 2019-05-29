@@ -2,17 +2,19 @@
 
 set -ev
 
-export BITCOIND_VERSION=0.17.1
+export PEERCOIND_VERSION=0.8.0
+# delete when it becomes full release
+export RC=rc9
 
-if sudo cp ~/bitcoin/bitcoin-$BITCOIND_VERSION/bin/bitcoind /usr/local/bin/bitcoind
+if sudo cp ~/peercoin/peercoin-$PEERCOIND_VERSION/bin/peercoind /usr/local/bin/peercoind
 then
-        echo "found cached bitcoind"
+        echo "found cached peecoind"
 else
-        mkdir -p ~/bitcoin && \
-        pushd ~/bitcoin && \
-        wget https://bitcoin.org/bin/bitcoin-core-$BITCOIND_VERSION/bitcoin-$BITCOIND_VERSION-x86_64-linux-gnu.tar.gz && \
-        tar xvfz bitcoin-$BITCOIND_VERSION-x86_64-linux-gnu.tar.gz && \
-        sudo cp ./bitcoin-$BITCOIND_VERSION/bin/bitcoind /usr/local/bin/bitcoind && \
+        mkdir -p ~/peercoin && \
+        pushd ~/peercoin && \
+        wget https://github.com/peercoin/peercoin/releases/download/v${PEERCOIND_VERSION}ppc.${RC}/peercoin-${PEERCOIND_VERSION}-x86_64-linux-gnu.tar.gz && \
+        tar xvfz peercoin-$PEERCOIND_VERSION-x86_64-linux-gnu.tar.gz && \
+        sudo cp ./peercoin-$PEERCOIND_VERSION/bin/peercoind /usr/local/bin/peercoind && \
         popd
 fi
 
