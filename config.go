@@ -138,6 +138,7 @@ var (
 
 	defaultBitcoindDir  = btcutil.AppDataDir("bitcoin", false)
 	defaultLitecoindDir = btcutil.AppDataDir("litecoin", false)
+	defaultPeercoindDir = btcutil.AppDataDir("peercoin", false)
 
 	defaultTorSOCKS   = net.JoinHostPort("localhost", strconv.Itoa(defaultTorSOCKSPort))
 	defaultTorDNS     = net.JoinHostPort(defaultTorDNSHost, strconv.Itoa(defaultTorDNSPort))
@@ -272,6 +273,9 @@ type config struct {
 	LtcdMode      *btcdConfig     `group:"ltcd" namespace:"ltcd"`
 	LitecoindMode *bitcoindConfig `group:"litecoind" namespace:"litecoind"`
 
+	Peercoin      *chainConfig    `group:"Peercoin" namespace:"peercoin"`
+	PeercoindMode *bitcoindConfig `group:"peercoind" namespace:"peercoind"`
+
 	Autopilot *autoPilotConfig `group:"Autopilot" namespace:"autopilot"`
 
 	Tor *torConfig `group:"Tor" namespace:"tor"`
@@ -358,6 +362,17 @@ func loadConfig() (*config, error) {
 		},
 		LitecoindMode: &bitcoindConfig{
 			Dir:     defaultLitecoindDir,
+			RPCHost: defaultRPCHost,
+		},
+		Peercoin: &chainConfig{
+			MinHTLC:       defaultPeercoinMinHTLCMSat,
+			BaseFee:       defaultPeercoinBaseFeeMSat,
+			FeeRate:       defaultPeercoinFeeRate,
+			TimeLockDelta: defaultPeercoinTimeLockDelta,
+			Node:          "peercoind",
+		},
+		PeercoindMode: &bitcoindConfig{
+			Dir:     defaultPeercoindDir,
 			RPCHost: defaultRPCHost,
 		},
 		MaxPendingChannels: defaultMaxPendingChannels,
@@ -495,6 +510,7 @@ func loadConfig() (*config, error) {
 	cfg.LtcdMode.Dir = cleanAndExpandPath(cfg.LtcdMode.Dir)
 	cfg.BitcoindMode.Dir = cleanAndExpandPath(cfg.BitcoindMode.Dir)
 	cfg.LitecoindMode.Dir = cleanAndExpandPath(cfg.LitecoindMode.Dir)
+	cfg.PeercoindMode.Dir = cleanAndExpandPath(cfg.PeercoindMode.Dir)
 	cfg.Tor.PrivateKeyPath = cleanAndExpandPath(cfg.Tor.PrivateKeyPath)
 
 	// Ensure that the user didn't attempt to specify negative values for
@@ -618,19 +634,19 @@ func loadConfig() (*config, error) {
 	// Determine the active chain configuration and its parameters.
 	switch {
 	// At this moment, multiple active chains are not supported.
-	case cfg.Litecoin.Active && cfg.Bitcoin.Active:
-		str := "%s: Currently both Bitcoin and Litecoin cannot be " +
+	case cfg.Peercoin.Active && cfg.Bitcoin.Active:
+		str := "%s: Currently both Bitcoin and Peercoin cannot be " +
 			"active together"
 		return nil, fmt.Errorf(str, funcName)
 
 	// Either Bitcoin must be active, or Litecoin must be active.
 	// Otherwise, we don't know which chain we're on.
-	case !cfg.Bitcoin.Active && !cfg.Litecoin.Active:
+	case !cfg.Bitcoin.Active && !cfg.Peercoin.Active:
 		return nil, fmt.Errorf("%s: either bitcoin.active or "+
-			"litecoin.active must be set to 1 (true)", funcName)
+			"peercoin.active must be set to 1 (true)", funcName)
 
-	case cfg.Litecoin.Active:
-		if cfg.Litecoin.TimeLockDelta < minTimeLockDelta {
+	case cfg.Peercoin.Active:
+		if cfg.Peercoin.TimeLockDelta < minTimeLockDelta {
 			return nil, fmt.Errorf("timelockdelta must be at least %v",
 				minTimeLockDelta)
 		}
@@ -638,23 +654,25 @@ func loadConfig() (*config, error) {
 		// number of network flags passed; assign active network params
 		// while we're at it.
 		numNets := 0
-		var ltcParams litecoinNetParams
-		if cfg.Litecoin.MainNet {
+		var ppcParams peercoinNetParams
+		if cfg.Peercoin.MainNet {
 			numNets++
-			ltcParams = litecoinMainNetParams
+			ppcParams = peercoinMainNetParams
 		}
-		if cfg.Litecoin.TestNet3 {
+		if cfg.Peercoin.TestNet {
 			numNets++
-			ltcParams = litecoinTestNetParams
+			ppcParams = peercoinTestNetParams
 		}
-		if cfg.Litecoin.RegTest {
-			numNets++
-			ltcParams = litecoinRegTestNetParams
-		}
-		if cfg.Litecoin.SimNet {
-			numNets++
-			ltcParams = litecoinSimNetParams
-		}
+		/*
+			if cfg.Litecoin.RegTest {
+				numNets++
+				ltcParams = litecoinRegTestNetParams
+			}
+			if cfg.Litecoin.SimNet {
+				numNets++
+				ltcParams = litecoinSimNetParams
+			}
+		*/
 
 		if numNets > 1 {
 			str := "%s: The mainnet, testnet, and simnet params " +
@@ -667,61 +685,54 @@ func loadConfig() (*config, error) {
 		// The target network must be provided, otherwise, we won't
 		// know how to initialize the daemon.
 		if numNets == 0 {
-			str := "%s: either --litecoin.mainnet, or " +
-				"litecoin.testnet must be specified"
+			str := "%s: either --peeercoin.mainnet, or " +
+				"peercoin.testnet must be specified"
 			err := fmt.Errorf(str, funcName)
 			return nil, err
 		}
 
-		if cfg.Litecoin.MainNet && cfg.DebugHTLC {
+		if cfg.Peercoin.MainNet && cfg.DebugHTLC {
 			str := "%s: debug-htlc mode cannot be used " +
-				"on litecoin mainnet"
+				"on peercoin mainnet"
 			err := fmt.Errorf(str, funcName)
 			return nil, err
 		}
 
-		// The litecoin chain is the current active chain. However
+		// The peercoin chain is the current active chain. However
 		// throughout the codebase we required chaincfg.Params. So as a
 		// temporary hack, we'll mutate the default net params for
-		// bitcoin with the litecoin specific information.
-		applyLitecoinParams(&activeNetParams, &ltcParams)
+		// bitcoin with the peercoin specific information.
+		applyPeercoinParams(&activeNetParams, &ppcParams)
 
-		switch cfg.Litecoin.Node {
-		case "ltcd":
-			err := parseRPCParams(cfg.Litecoin, cfg.LtcdMode,
-				litecoinChain, funcName)
-			if err != nil {
-				err := fmt.Errorf("unable to load RPC "+
-					"credentials for ltcd: %v", err)
-				return nil, err
-			}
-		case "litecoind":
-			if cfg.Litecoin.SimNet {
-				return nil, fmt.Errorf("%s: litecoind does not "+
+		switch cfg.Peercoin.Node {
+
+		case "peercoind":
+			if cfg.Peercoin.SimNet {
+				return nil, fmt.Errorf("%s: peercoind does not "+
 					"support simnet", funcName)
 			}
-			err := parseRPCParams(cfg.Litecoin, cfg.LitecoindMode,
-				litecoinChain, funcName)
+			err := parseRPCParams(cfg.Peercoin, cfg.PeercoindMode,
+				peercoinChain, funcName)
 			if err != nil {
 				err := fmt.Errorf("unable to load RPC "+
-					"credentials for litecoind: %v", err)
+					"credentials for peercoind: %v", err)
 				return nil, err
 			}
 		default:
-			str := "%s: only ltcd and litecoind mode supported for " +
-				"litecoin at this time"
+			str := "%s: peercoind mode supported for " +
+				"peercoin at this time"
 			return nil, fmt.Errorf(str, funcName)
 		}
 
-		cfg.Litecoin.ChainDir = filepath.Join(cfg.DataDir,
+		cfg.Peercoin.ChainDir = filepath.Join(cfg.DataDir,
 			defaultChainSubDirname,
-			litecoinChain.String())
+			peercoinChain.String())
 
-		// Finally we'll register the litecoin chain as our current
+		// Finally we'll register the peercoin chain as our current
 		// primary chain.
-		registeredChains.RegisterPrimaryChain(litecoinChain)
-		maxFundingAmount = maxLtcFundingAmount
-		maxPaymentMSat = maxLtcPaymentMSat
+		registeredChains.RegisterPrimaryChain(peercoinChain)
+		maxFundingAmount = maxPpcFundingAmount
+		maxPaymentMSat = maxPppcPaymentMSat
 
 	case cfg.Bitcoin.Active:
 		// Multiple networks can't be selected simultaneously.  Count
@@ -1243,6 +1254,10 @@ func parseRPCParams(cConfig *chainConfig, nodeConfig interface{}, net chainCode,
 			daemonName = "litecoind"
 			confDir = conf.Dir
 			confFile = "litecoin"
+		case peercoinChain:
+			daemonName = "peercoind"
+			confDir = conf.Dir
+			confFile = "peercoin"
 		}
 
 		// If not all of the parameters are set, we'll assume the user
@@ -1279,7 +1294,7 @@ func parseRPCParams(cConfig *chainConfig, nodeConfig interface{}, net chainCode,
 				err)
 		}
 		nConf.RPCUser, nConf.RPCPass = rpcUser, rpcPass
-	case "bitcoind", "litecoind":
+	case "bitcoind", "litecoind", "peercoind":
 		nConf := nodeConfig.(*bitcoindConfig)
 		rpcUser, rpcPass, zmqBlockHost, zmqTxHost, err :=
 			extractBitcoindRPCParams(confFile)
