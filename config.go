@@ -732,7 +732,7 @@ func loadConfig() (*config, error) {
 		// primary chain.
 		registeredChains.RegisterPrimaryChain(peercoinChain)
 		maxFundingAmount = maxPpcFundingAmount
-		maxPaymentMSat = maxPppcPaymentMSat
+		maxPaymentMSat = maxPpcPaymentMSat
 
 	case cfg.Bitcoin.Active:
 		// Multiple networks can't be selected simultaneously.  Count
